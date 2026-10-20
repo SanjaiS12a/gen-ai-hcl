@@ -84,7 +84,7 @@ export function SystemStatus() {
         {error
           ? "Backend not running"
           : health
-            ? `${health.provider} · ${health.generation_progress?.phase === "generating" ? `generating (${health.generation_progress.generated_tokens} tokens)` : health.model_status.replace(/_/g, " ")}`
+            ? `${health.provider} · ${health.generation_progress?.phase === "generating" ? `generating${health.generation_progress.generated_tokens > 0 ? ` (${health.generation_progress.generated_tokens} tokens)` : ""}` : health.model_status.replace(/_/g, " ")}`
             : "Connecting to backend…"}
       </span>
       <span>

@@ -25,6 +25,11 @@ export default function Chat({
     [last, setLast] = useState<ChatResponse | null>(null);
   const { rulesOnly } = usePreferences();
   const active = useRef(true);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const panel = messagesRef.current;
+    if (panel) panel.scrollTop = panel.scrollHeight;
+  }, [messages]);
   useEffect(() => {
     active.current = true;
     return () => {
@@ -65,7 +70,7 @@ export default function Chat({
           </button>
         ))}
       </div>
-      <div className="messages" aria-live="polite">
+      <div className="messages" aria-live="polite" ref={messagesRef}>
         {messages.map((m) => (
           <article className={`message ${m.role}`} key={m.id}>
             <strong>{m.role === "user" ? "You" : "Copilot"}</strong>

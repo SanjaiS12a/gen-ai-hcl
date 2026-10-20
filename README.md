@@ -19,7 +19,45 @@ Every explanation/chat response includes engine, provider, model, and generation
 
 Runtime is local-only: no cloud API, telemetry, external assets, remote code, online enrichment, or automatic model downloads. Package installation and the explicit model download below need internet access. Data stays in the local SQLite file. Anyone with access to this computer/database can read it: this single-user local demo has no authentication, encryption, or production deployment controls.
 
-## Windows setup
+## Fast Windows CPU setup (recommended)
+
+The active CPU profile keeps **Qwen3.5-0.8B**, using its Q8_0 GGUF text weights with the portable [llama.cpp runtime](https://github.com/ggml-org/llama.cpp). It avoids Python tensor/JSON-filter overhead. Step-by-step questions generate only three instructions, labeled **Investigate**, **Confirm**, and **Respond if confirmed**, rather than regenerating an entire explanation. The full explanation remains available separately.
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements-fast.txt
+# Explicit network setup: pinned runtime archive and model, SHA-256 checked.
+.\scripts\setup_fast_model.ps1
+Copy-Item .env.example .env
+# Adjust paths in .env if setup printed a different model/runtime directory.
+cd frontend
+npm ci
+cd ..
+.\scripts\run_backend.ps1
+# In another terminal:
+.\scripts\run_frontend.ps1
+```
+
+On this machine the verified runtime and model already exist; no repeat download is required. The portable CPU runtime archive is approximately 24 MB and the Q8_0 model approximately 834 MB. There is no Ollama, Docker, GPU package, or new Python inference dependency in this profile. The original safetensors model is retained for the optional Transformers profile.
+
+```dotenv
+LLM_PROVIDER=llamacpp
+MODEL_PATH=D:\HCL\models\Qwen3.5-0.8B-GGUF\Qwen3.5-0.8B-Q8_0.gguf
+LLAMA_SERVER_PATH=D:\HCL\tools\llama-b11755\llama-server.exe
+LLAMA_PORT=8081
+LLAMA_THREADS=4
+LLAMA_BATCH_THREADS=8
+MAX_NEW_TOKENS=300
+GENERATION_TIMEOUT=90
+```
+
+The backend starts its own hidden model process lazily, reuses it, and stops it on normal shutdown. Its authenticated HTTP connection is fixed to `127.0.0.1`; proxies and redirects are disabled. The model server runs offline with thinking disabled, one generation slot, and a 4096-token context. Port 8081 must be free; the provider refuses to attach to an unrelated server. `LLAMA_PORT` can select another loopback port. The application API remains on port 8000 and the frontend on [http://localhost:5173](http://localhost:5173).
+
+Observed on the Ryzen 7 5825U: the previous Transformers warm chat took 90.8 seconds. Standalone native focused plans took 11.0 seconds (phishing) and 11.8 seconds (brute force). Three fresh browser plans took 15.3, 13.3, and 22.0 seconds, an observed range of 13–22 seconds; the first included native startup. A full explanation took 27.0 seconds. These are individual observations with different context/output lengths and CPU/memory conditions, not a latency guarantee. Model output still needs review. [Benchmark details](docs/performance-2026-10-20.md) describe the comparison.
+
+Local triage guidance is included as recommendations, never observed facts. A grounding check retries/falls back if a model invents an email address, IP, URL or hash. It is a narrow check, not proof of factual accuracy. No action is executed.
+
+## Optional Transformers setup
 
 Use Python 3.11+ and Node 20+ (Node 20.19+ for Vite 7). Python 3.13 and Node 24 were used during development. Run commands from this repository's root in PowerShell.
 
@@ -76,7 +114,7 @@ Open [http://localhost:5173](http://localhost:5173). The API binds to loopback p
 
 For a model-free demo set `LLM_PROVIDER=mock` in `.env` and restart the backend. The Settings switch selects rules-only mode for this browser's explanation/chat/report requests. It does not unload an already loaded model. `LLM_PROVIDER=ollama` is an unavailable stub; it makes no HTTP calls and falls back to rules. Provider/model changes require a backend restart.
 
-## Model compatibility and hardware limits
+## Optional Transformers compatibility and hardware limits
 
 The target is **Qwen3.5-0.8B**, replacing the original brief's 2B target at the user's request. The downloaded revision was `2fc06364715b967f1860aea9cf38778875588b17`; its weights are approximately 1.75 GB. Other compatible local paths can be supplied, but 2B requires more memory.
 
@@ -141,20 +179,21 @@ cd ..
 .\.venv\Scripts\python.exe backend\eval\run_eval.py
 ```
 
-The evaluation contains 34 manually labeled regression cases, including nine benign examples. It prints rules classification accuracy and severity agreement. Because the model is intentionally prohibited from deciding those fields, the LLM column is explicitly inherited from rules. This is a small synthetic regression evaluation, not an estimate of production detection accuracy. `--llm` explicitly runs all local narrative generations and reports schema success, fallback counts, and timing; it can be slow and skips when the model cannot load.
+The evaluation contains 34 manually labeled regression cases, including nine benign examples. It prints rules classification accuracy and severity agreement. Because the model is intentionally prohibited from deciding those fields, the LLM column is explicitly inherited from rules. This is a small synthetic regression evaluation, not an estimate of production detection accuracy. `--llm` explicitly runs all local narrative generations and reports schema success, fallback counts, and timing; it can be slow and skips when the model cannot load. Use `--provider llamacpp --model-path <GGUF-file> --server-path <llama-server.exe>` for the fast profile, or `--provider transformers --model-path <safetensors-directory>` for the original profile. Stop the backend first or set a different free `LLAMA_PORT`.
 
-Run the hardware smoke check separately (it does not read `.env`; use arguments or environment variables):
+Run the hardware smoke check separately (it does not read `.env`; use arguments or environment variables). For the fast profile, stop the backend first or choose another free loopback port:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\check_model.py --model-path D:\HCL\models\Qwen3.5-0.8B --cpu-int8 --disable-mmap --timeout 300 --max-new-tokens 400
+$env:LLAMA_PORT='8082'
+.\.venv\Scripts\python.exe scripts\check_model.py --provider llamacpp --server-path D:\HCL\tools\llama-b11755\llama-server.exe --model-path D:\HCL\models\Qwen3.5-0.8B-GGUF\Qwen3.5-0.8B-Q8_0.gguf --alert-id 1002 --question 'How do I resolve this alert step by step?' --runs 2 --timeout 90 --max-new-tokens 300
 ```
 
-It prints load time, explanation JSON, generation time, current/peak process RAM on Windows, and exit code 0 for real model output, 2 for rules fallback, or 1 for loading failure. Loading itself can outlast the requested generation timeout. Peak working set is process memory, not whole-system commit use; also inspect Task Manager.
+It prints load time, response JSON, generation time, native token timings, and current/peak process RAM on Windows. Native mode reports Python parent and model-child RAM separately. Exit code 0 means real model output, 2 means rules fallback, and 1 means loading failure. `--question` selects the compact chat plan; omit it for a full explanation. The optional Transformers check uses `--provider transformers --model-path D:\HCL\models\Qwen3.5-0.8B --cpu-int8 --disable-mmap --timeout 300`. Peak working set is process memory, not whole-system commit use; also inspect Task Manager.
 
 ## Limitations and troubleshooting
 
-- Model not loaded/error: verify the local path and complete safetensors/tokenizer/config files; inspect pinned dependencies and memory. Restart after a load error. The backend remains usable with rules.
-- Slow CPU response: reduce `MAX_NEW_TOKENS`, close other heavy applications, and try `TORCH_THREADS=4`. More threads can be slower. Reducing output length can increase invalid/truncated JSON fallback.
+- Model not loaded/error: for native mode verify the GGUF path, runtime executable/DLLs and a free `LLAMA_PORT`; for Transformers verify the complete safetensors/tokenizer/config directory. Restart after a load error. The backend remains usable with rules. On forced backend termination, an orphan native process can retain the port; stop only that known process or choose another port.
+- Slow CPU response: use the step-by-step chip for a compact plan; close other heavy applications and try `LLAMA_THREADS=4`, `LLAMA_BATCH_THREADS=8`. The optional Transformers profile uses `TORCH_THREADS=4`. More threads can be slower. Reducing output length can increase invalid/truncated JSON fallback.
 - 0.8B narrative quality: it can miss nuance, repeat templates, follow malicious data, hallucinate, or produce malformed JSON. Treat all narrative as unverified assistance; consult original sensor logs. Neither MITRE candidates nor a false-positive estimate establishes compromise.
 - Long inputs: model context can be shortened or rejected while full original text is preserved. The UI shows truncation/fallback. Ask for a smaller, focused alert if needed.
 - Scope refusal: rephrase as one question about the current alert. The server deliberately does not answer general security education, other alerts, or mixed requests.
@@ -163,7 +202,7 @@ It prints load time, explanation JSON, generation time, current/peak process RAM
 
 ## Verify on your laptop
 
-- [ ] Offline model loads from the supplied directory after closing memory-heavy applications.
+- [ ] Offline model loads from the supplied GGUF file (or directory for Transformers) after closing memory-heavy applications.
 - [ ] `check_model.py` returns real `engine=llm` output and acceptable load/generation time.
 - [ ] Peak process RAM and whole-system commit remain acceptable with both UI and backend running.
 - [ ] The queue and health stay responsive during generation; repeated calls serialize/fall back.

@@ -3,18 +3,13 @@ from lmformatenforcer import (CharacterLevelParserConfig, JsonSchemaParser,
                               TokenEnforcer, TokenEnforcerTokenizerData)
 
 
-SCHEMA = {
-    'type': 'object', 'additionalProperties': False,
-    'required': ['summary', 'why_it_matters', 'verify_first', 'next_steps'],
-    'properties': {
-        'summary': {'type': 'string', 'minLength': 1, 'maxLength': 350},
-        'why_it_matters': {'type': 'string', 'minLength': 1, 'maxLength': 250},
-        'verify_first': {'type': 'array', 'minItems': 2, 'maxItems': 2,
-                         'items': {'type': 'string', 'minLength': 1, 'maxLength': 120}},
-        'next_steps': {'type': 'array', 'minItems': 3, 'maxItems': 3,
-                       'items': {'type': 'string', 'minLength': 1, 'maxLength': 160}},
-    },
-}
+from app.llm.schema import SCHEMA
+
+# LMFE 0.11.3 cannot combine string patterns and length bounds. The native
+# runtime supports both; the legacy fallback retains length bounds here.
+from copy import deepcopy
+SCHEMA = deepcopy(SCHEMA)
+SCHEMA['properties']['verify_first']['items'].pop('pattern',None)
 
 
 def build_tokenizer_data(tokenizer):

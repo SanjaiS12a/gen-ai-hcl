@@ -1,8 +1,10 @@
 """Small labeled regression evaluation; not a measure of operational detection quality."""
 import argparse
 import json
+import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
@@ -12,6 +14,10 @@ from app.services.analyzer import analyze_alert
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--llm',action='store_true',help='Explicitly load the local model and evaluate narrative availability (slow).')
+    parser.add_argument('--provider',choices=['transformers','llamacpp'],default=os.getenv('LLM_PROVIDER','transformers'))
+    parser.add_argument('--model-path',default=None)
+    parser.add_argument('--server-path',default=None)
+    parser.add_argument('--timeout',type=float,default=90)
     args = parser.parse_args()
     cases = json.loads(Path(__file__).with_name('eval_set.json').read_text())
     correct_type, correct_severity = 0,0
@@ -33,16 +39,27 @@ def main():
     from app.db import Store
     from app.models import IngestRequest
     from app.llm.copilot import Copilot
-    from app.llm.providers import TransformersProvider
-    provider = TransformersProvider()
+    from app.llm.providers import get_provider
+    os.environ['LLM_PROVIDER'] = args.provider
+    if args.model_path:
+        os.environ['MODEL_PATH'] = args.model_path
+    if args.server_path:
+        os.environ['LLAMA_SERVER_PATH'] = args.server_path
+    provider = get_provider()
     try:
-        provider._load()
+        if args.provider == 'llamacpp':
+            provider._load(time.monotonic()+args.timeout)
+        else:
+            provider._load()
     except Exception as exc:
         print('LLM column skipped: local model unavailable:',exc)
+        close = getattr(provider,'close',None)
+        if close:
+            close()
         return 0
     with tempfile.TemporaryDirectory() as folder:
         store = Store(str(Path(folder)/'eval.db'))
-        copilot = Copilot(store,provider)
+        copilot = Copilot(store,provider,timeout=args.timeout)
         valid, elapsed = 0,[]
         try:
             for case in cases:

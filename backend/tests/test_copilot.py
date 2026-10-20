@@ -47,6 +47,37 @@ def test_placeholder_steps_are_not_accepted_as_model_advice(tmp_path):
     assert c.provider.calls == 2
 
 
+def test_fabricated_email_is_retried_instead_of_presented_as_evidence(tmp_path):
+    class Invented(MockProvider):
+        def generate(self,messages,deadline):
+            self.calls += 1
+            return json.dumps({'summary':'Phishing targeted analyst@invoice.example.',
+                'why_it_matters':'Credentials could be exposed.',
+                'verify_first':['Check message headers','Review proxy logs'],
+                'next_steps':['Investigate delivery logs','Confirm clicks','Respond if confirmed: reset affected credentials']})
+    store,c=setup(tmp_path,Invented())
+    assert c.explain(store.get(1002)).engine == 'rules'
+    assert c.provider.calls == 2
+
+
+def test_real_indicator_and_derived_url_origin_are_allowed(tmp_path):
+    class Grounded(MockProvider):
+        def generate(self,messages,deadline):
+            self.calls+=1
+            return json.dumps({'summary':'A message from billing@invoice.example needs review.',
+                'why_it_matters':'Credentials could be exposed.',
+                'verify_first':['Check message headers','Review https://invoice.example proxy records'],
+                'next_steps':['Investigate delivery logs','Confirm clicks','Respond if confirmed: reset affected credentials']})
+    store,c=setup(tmp_path,Grounded())
+    assert c.explain(store.get(1002)).engine == 'llm'
+
+
+def test_prompt_provides_conditional_incident_guidance(tmp_path):
+    store,c=setup(tmp_path)
+    message=c.messages(store.get(1002))[-1]['content']
+    assert 'delivery trace' in message and 'credential submission' in message
+
+
 def test_retry_recovers(tmp_path):
     class Retry(MockProvider):
         def generate(self,messages,deadline):
@@ -108,3 +139,6 @@ def test_prompt_requests_practical_step_by_step_actions(tmp_path):
     assert 'High severity does not prove compromise' in messages[0]['content']
     assert messages[-1]['content'].index('END_UNTRUSTED_ALERT_DATA') < messages[-1]['content'].index('Return ONLY a JSON object')
     assert 'check one' not in messages[-1]['content']
+    assert 'Investigate' in messages[-1]['content']
+    assert 'Respond if confirmed' in messages[-1]['content']
+    assert 'candidate_actions' not in messages[-1]['content']

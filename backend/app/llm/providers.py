@@ -158,4 +158,7 @@ class UnavailableProvider:
 
 def get_provider():
     name = os.getenv('LLM_PROVIDER','transformers').lower()
+    if name == 'llamacpp':
+        from app.llm.native import LlamaCppProvider
+        return LlamaCppProvider()
     return MockProvider() if name == 'mock' else TransformersProvider() if name == 'transformers' else UnavailableProvider(name)

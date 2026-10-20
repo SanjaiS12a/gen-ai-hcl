@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Literal
+from typing import Literal, Annotated
 
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
@@ -104,6 +104,15 @@ class FalsePositive(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True, str_strip_whitespace=True)
     likelihood: Literal['LOW', 'MEDIUM', 'HIGH']
     reason: str = Field(min_length=1, max_length=400)
+
+
+class ActionPlan(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True, str_strip_whitespace=True)
+    next_steps: tuple[
+        Annotated[str, Field(pattern=r'^Investigate: .{10,180}$')],
+        Annotated[str, Field(pattern=r'^Confirm: .{10,180}$')],
+        Annotated[str, Field(pattern=r'^Respond if confirmed: .{10,180}$')],
+    ]
 
 
 class Narrative(BaseModel):

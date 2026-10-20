@@ -112,4 +112,4 @@ Run the relevant checks and summarize results after each phase. Preserve any env
 
 ## Review state
 
-Design prepared from the supplied brief and inspected code. Awaiting written-spec review before implementation planning, as required by the installed brainstorming workflow. Application code is unchanged.
+Written design approved by the user on 2026-10-20, with explicit authorization to plan and complete all six phases using Qwen3.5-0.8B. Implementation and verification evidence are recorded in `docs/implementation-progress.md`.

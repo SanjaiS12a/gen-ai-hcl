@@ -8,7 +8,7 @@ IOC_PATTERNS = {
     "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
     "url": re.compile(r"https?://[^\s,;\"')>\]]+", re.IGNORECASE),
     "hash": re.compile(r"\b(?:[a-fA-F0-9]{32}|[a-fA-F0-9]{40}|[a-fA-F0-9]{64})\b"),
-    "domain": re.compile(r"\b(?:[a-zA-Z0-9-]+\.)+(?:com|net|org|io|co|ru|cn|xyz|info|biz|in)\b"),
+    "domain": re.compile(r"\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+(?:[a-zA-Z]{2,63}|xn--[a-zA-Z0-9-]+)\b"),
 }
 
 USERNAME_PATTERNS = [
@@ -21,10 +21,13 @@ USERNAME_PATTERNS = [
 def extract_iocs(raw_alert: str) -> list[Indicator]:
     found: list[Indicator] = []
     seen: set[tuple[str, str]] = set()
+    occupied = [m.span() for name in ("email", "url") for m in IOC_PATTERNS[name].finditer(raw_alert)]
 
     for indicator_type, pattern in IOC_PATTERNS.items():
-        for match in pattern.findall(raw_alert):
-            value = match.rstrip(".")
+        for match in pattern.finditer(raw_alert):
+            if indicator_type == "domain" and any(start <= match.start() and match.end() <= end for start, end in occupied):
+                continue
+            value = match.group().rstrip(".")
             key = (indicator_type, value.lower())
             if key not in seen:
                 seen.add(key)

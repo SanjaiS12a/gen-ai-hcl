@@ -5,3 +5,9 @@ node_modules/
 dist/
 .env
 .env.local
+data/
+*.db
+*.db-shm
+*.db-wal
+.pytest_cache/
+.superpowers/

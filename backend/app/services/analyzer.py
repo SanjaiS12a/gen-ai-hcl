@@ -3,6 +3,7 @@ import re
 
 from app.models import EvidenceItem, IncidentAnalysis, MitreTechnique, Severity
 from app.services.ioc import extract_iocs
+from app.llm.mitre import validate_mitre
 
 
 class Rule:
@@ -182,7 +183,7 @@ def analyze_alert(raw_alert: str) -> IncidentAnalysis:
             "Unclassified Security Alert Requiring Triage",
             Severity.low,
             [],
-            [MitreTechnique(tactic="Discovery", technique_id="T1087", technique="Account Discovery")],
+            [],
             [
                 "Review the raw event details and identify the affected user, host, and source.",
                 "Correlate the event with authentication, endpoint, network, and application logs.",
@@ -199,7 +200,15 @@ def analyze_alert(raw_alert: str) -> IncidentAnalysis:
     severity = _adjust_severity(rule.severity, raw_alert)
     iocs = extract_iocs(raw_alert)
     evidence = _extract_evidence(raw_alert)
-    confidence = "HIGH" if score >= 2 or len(iocs) >= 2 else "MEDIUM" if score == 1 else "LOW"
+    confidence = "HIGH" if score >= 2 else "MEDIUM" if score == 1 else "LOW"
+    reasons = list(rule.suspicious_reasons)
+    if score < 2:
+        reasons.append("Possible false positive: weak or missing detection signals; verify the event before acting.")
+    approved = _contains(normalized, "approved maintenance") or _contains(normalized, "authorized vulnerability scan")
+    if approved and rule.incident_type in {'Unknown','Port Scan','Suspicious Login'} and severity != Severity.critical:
+        severity = Severity.low
+        confidence = "LOW"
+        reasons.append("Possible false positive: the alert states approved activity; independently verify the approval.")
     summary = _build_summary(rule, evidence, iocs)
     report = _build_report(rule, severity, summary, evidence, iocs)
 
@@ -210,11 +219,11 @@ def analyze_alert(raw_alert: str) -> IncidentAnalysis:
         severity=severity,
         confidence=confidence,
         summary=summary,
-        why_suspicious=rule.suspicious_reasons,
+        why_suspicious=reasons,
         root_cause=rule.root_cause,
         extracted_iocs=iocs,
         evidence=evidence,
-        mitre_attack=rule.mitre,
+        mitre_attack=validate_mitre(rule.mitre),
         recommended_actions=rule.actions,
         analyst_report=report,
         raw_alert=raw_alert,
@@ -223,25 +232,30 @@ def analyze_alert(raw_alert: str) -> IncidentAnalysis:
 
 def answer_incident_question(incident: IncidentAnalysis, question: str) -> str:
     q = question.lower()
-    if any(word in q for word in ["severe", "severity", "critical", "priority"]):
+    if any(_contains(q, word) for word in ["severe", "severity", "critical", "priority"]):
         return f"The incident is rated {incident.severity.value}. The rating is based on the incident type, observed indicators, and potential impact described in the alert."
-    if any(word in q for word in ["ioc", "indicator", "ip", "domain", "hash", "url"]):
+    if any(_contains(q, word) for word in ["ioc", "iocs", "indicator", "ip", "domain", "hash", "url"]):
         if not incident.extracted_iocs:
             return "No concrete IOCs were extracted from the alert. Ask for additional logs or enrich the event with source, destination, user, host, and file details."
         values = ", ".join(f"{ioc.type}: {ioc.value}" for ioc in incident.extracted_iocs)
         return f"Extracted IOCs: {values}."
-    if any(word in q for word in ["mitre", "attack", "technique", "tactic"]):
+    if any(_contains(q, word) for word in ["mitre", "attack", "technique", "tactic"]):
         mapping = ", ".join(f"{item.technique_id} - {item.technique}" for item in incident.mitre_attack)
-        return f"The observed behavior maps to MITRE ATT&CK: {mapping}."
-    if any(word in q for word in ["do", "next", "contain", "respond", "action"]):
+        return f"Rule-based MITRE ATT&CK candidates: {mapping}. Verify the behavior." if mapping else "No MITRE technique is supported by the rule baseline."
+    if any(_contains(q, word) for word in ["do", "next", "contain", "respond", "action"]):
         return "Recommended next steps: " + " ".join(f"{idx + 1}. {action}" for idx, action in enumerate(incident.recommended_actions[:4]))
-    if any(word in q for word in ["why", "suspicious", "reason"]):
+    if any(_contains(q, word) for word in ["why", "suspicious", "reason"]):
         return "This is suspicious because " + " ".join(incident.why_suspicious)
     return f"This appears to be {incident.title}. {incident.summary} Start by validating the indicators, checking for successful compromise, and following the recommended response steps."
 
 
+def _contains(text: str, keyword: str) -> bool:
+    return re.search(r"(?<!\w)" + re.escape(keyword) + r"(?!\w)", text, re.IGNORECASE) is not None
+
+
 def _score_rule(rule: Rule, normalized: str) -> int:
-    return sum(1 for keyword in rule.keywords if keyword in normalized)
+    weak = {"subject:", "sender:", "email", "attachment", "endpoint", "hash", "attempts", "ssh", "mfa", "upload", "data transfer", "http 500"}
+    return sum(1 for keyword in rule.keywords if keyword not in weak and _contains(normalized, keyword))
 
 
 def _adjust_severity(base: Severity, raw_alert: str) -> Severity:
@@ -251,17 +265,19 @@ def _adjust_severity(base: Severity, raw_alert: str) -> Severity:
         return Severity.critical
     if attempts and attempts >= 25 and base == Severity.medium:
         return Severity.high
-    if any(term in text for term in ["admin", "root", "domain admin", "privileged"]):
+    if any(_contains(text, term) for term in ["admin", "root", "domain admin", "privileged"]):
         if base == Severity.medium:
             return Severity.high
-    if any(term in text for term in ["ransomware", "exfiltration", "confirmed compromise"]):
+    if any(_contains(text, term) for term in ["ransomware", "exfiltration", "confirmed compromise"]):
         return Severity.critical
     return base
 
 
 def _first_int_after(text: str, labels: list[str]) -> int | None:
     for label in labels:
-        match = re.search(rf"{label}\D+(\d+)", text)
+        if label not in {"attempts", "count"}:
+            continue
+        match = re.search(rf"\b{re.escape(label)}[ \t]*[:=][ \t]*(\d+)\b", text, re.IGNORECASE)
         if match:
             return int(match.group(1))
     return None
@@ -281,8 +297,9 @@ def _extract_evidence(raw_alert: str) -> list[EvidenceItem]:
         "URL": r"\burl\s*[:=]\s*([^\n,;]+)",
     }
     for label, pattern in patterns.items():
+        pattern = pattern.replace(r"\s*", r"[ \t]*").replace(r"\s+", r"[ \t]+")
         match = re.search(pattern, raw_alert, re.IGNORECASE)
-        if match:
+        if match and match.group(1).strip():
             evidence.append(EvidenceItem(label=label, value=match.group(1).strip()))
     return evidence
 

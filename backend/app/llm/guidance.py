@@ -1,0 +1,27 @@
+"""Local triage guidance supplied as context, never asserted as observed facts."""
+GUIDANCE = {
+    'Phishing': ['Preserve headers and email delivery trace; identify actual recipients, not the sender.',
+                 'Check proxy URL clicks, identity sign-ins and user reports of credential submission.',
+                 'If malicious delivery is confirmed quarantine matching messages; if credentials were submitted reset the affected account and revoke sessions. Verify no new suspicious sign-ins.'],
+    'Brute Force': ['Review authentication failures for the source IP and named account.',
+                    'Correlate any successful login with the account owner and MFA; failures alone do not prove compromise.',
+                    'If unauthorized access is confirmed revoke sessions and reset affected credentials; verify subsequent logins are legitimate.'],
+    'Malware': ['Preserve EDR detection, file hash and process tree for the affected host.',
+                'Check whether execution or persistence occurred and whether quarantine succeeded.',
+                'If active malicious execution is confirmed isolate the affected host, remediate, then verify a clean scan and no recurring processes.'],
+    'Suspicious Login': ['Review identity sign-in records for the named account, source IP and device.',
+                         'Ask the owner to verify the login; correlate MFA and subsequent session activity.',
+                         'If unauthorized revoke the affected sessions and reset credentials; verify trusted access and no recurring suspicious sessions.'],
+    'Port Scan': ['Review firewall or IDS connection records for source, targets and ports.',
+                  'Check whether this was an authorized scan and whether exploitation followed.',
+                  'If unauthorized restrict the scanning source under policy; verify expected services remain available and suspicious traffic stops.'],
+    'Web Attack': ['Preserve WAF and web access records containing the request and source.',
+                   'Correlate response status, application errors, file writes and database activity to distinguish attempts from successful exploitation.',
+                   'If exploitation is confirmed contain the affected route or host, remediate the vulnerability, and verify the attack no longer succeeds.'],
+    'Data Exfiltration': ['Preserve proxy, DLP and endpoint records for destination, process and transfer volume.',
+                          'Confirm data sensitivity and whether the transfer was authorized with the owner.',
+                          'If unauthorized contain the affected account or host and destination, escalate, then verify the transfer stops.'],
+}
+DEFAULT_GUIDANCE = ['Inspect the original sensor record and supplied indicators.',
+                    'Confirm authorization and actual outcome with the owner; request missing telemetry.',
+                    'Only if unauthorized activity is confirmed recommend scoped containment, then verify normal operation.']

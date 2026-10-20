@@ -1,0 +1,116 @@
+{
+  "previous_transformers_chat_ms": 90800,
+  "browser_native_plans": [
+    {
+      "id": 6,
+      "alert_id": 1002,
+      "role": "assistant",
+      "content": "1. Investigate: Verify the sender's legitimacy by checking the original sensor logs and proxy URL clicks.\n2. Confirm: Verify the actual recipient address and confirm no new suspicious sign-ins occurred.\n3. Respond if confirmed: Quarantine the malicious message and revoke affected sessions if credentials were submitted.",
+      "timestamp": "2026-10-20T17:28:56.354597+05:30",
+      "metadata": {
+        "engine": "llm",
+        "provider": "llamacpp",
+        "model": "D:\\HCL\\models\\Qwen3.5-0.8B-GGUF\\Qwen3.5-0.8B-Q8_0.gguf",
+        "generation_ms": 15317,
+        "fallback_reason": null
+      }
+    },
+    {
+      "id": 8,
+      "alert_id": 1002,
+      "role": "assistant",
+      "content": "1. Investigate: Verify the sender's legitimacy by checking the original sensor logs and proxy URL clicks.\n2. Confirm: Verify the actual recipient address and confirm no new suspicious sign-ins occurred.\n3. Respond if confirmed: Quarantine the malicious message and revoke affected sessions if credentials were submitted.",
+      "timestamp": "2026-10-20T17:39:15.216684+05:30",
+      "metadata": {
+        "engine": "llm",
+        "provider": "llamacpp",
+        "model": "D:\\HCL\\models\\Qwen3.5-0.8B-GGUF\\Qwen3.5-0.8B-Q8_0.gguf",
+        "generation_ms": 13266,
+        "fallback_reason": null
+      }
+    },
+    {
+      "id": 10,
+      "alert_id": 1002,
+      "role": "assistant",
+      "content": "1. Investigate: Verify the sender's legitimacy by checking the original sensor logs and proxy URL clicks.\n2. Confirm: Verify the actual recipient address and confirm no new suspicious sign-ins occurred.\n3. Respond if confirmed: Quarantine the malicious message and revoke affected sessions if credentials were submitted.",
+      "timestamp": "2026-10-20T17:44:45.069577+05:30",
+      "metadata": {
+        "engine": "llm",
+        "provider": "llamacpp",
+        "model": "D:\\HCL\\models\\Qwen3.5-0.8B-GGUF\\Qwen3.5-0.8B-Q8_0.gguf",
+        "generation_ms": 21967,
+        "fallback_reason": null
+      }
+    }
+  ],
+  "full_explanation": {
+    "summary": "An email gateway detected a phishing attempt targeting billing@invoice.example with a malicious URL, requiring immediate verification of the actual recipient.",
+    "why_it_matters": "This is a HIGH severity threat that could compromise credentials if the malicious URL was used to steal data from the actual user account.",
+    "verify_first": [
+      "Review the email headers to confirm the actual recipient is not the sender.",
+      "Check proxy URL clicks and identity sign-ins to verify the user submitted credentials to the malicious domain."
+    ],
+    "next_steps": [
+      "Investigate the actual recipient and verify no new suspicious sign-ins occurred.",
+      "If malicious delivery is confirmed, quarantine matching messages and reset affected accounts.",
+      "Verify no new suspicious sign-ins occurred after remediation."
+    ],
+    "false_positive_likelihood": null,
+    "engine": "llm",
+    "provider": "llamacpp",
+    "model": "D:\\HCL\\models\\Qwen3.5-0.8B-GGUF\\Qwen3.5-0.8B-Q8_0.gguf",
+    "generation_ms": 27031,
+    "fallback_reason": null,
+    "context_truncated": false,
+    "cached": false
+  },
+  "standalone": [
+    {
+      "alert_id": 1002,
+      "elapsed_seconds": 10.962,
+      "usage": {
+        "completion_tokens": 78,
+        "prompt_tokens": 500,
+        "total_tokens": 578,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 500,
+        "prompt_ms": 4557.413,
+        "prompt_per_token_ms": 9.114825999999999,
+        "prompt_per_second": 109.71136475891038,
+        "predicted_n": 78,
+        "predicted_ms": 6013.535,
+        "predicted_per_token_ms": 78.09785714285714,
+        "predicted_per_second": 12.804448631295902
+      }
+    },
+    {
+      "alert_id": 1001,
+      "elapsed_seconds": 11.846,
+      "usage": {
+        "completion_tokens": 92,
+        "prompt_tokens": 509,
+        "total_tokens": 601,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "timings": {
+        "cache_n": 0,
+        "prompt_n": 509,
+        "prompt_ms": 4504.369,
+        "prompt_per_token_ms": 8.84944793713163,
+        "prompt_per_second": 113.001399308094,
+        "predicted_n": 92,
+        "predicted_ms": 7198.752,
+        "predicted_per_token_ms": 79.10716483516484,
+        "predicted_per_second": 12.641080009423854
+      }
+    }
+  ]
+}

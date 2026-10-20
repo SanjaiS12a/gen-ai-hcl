@@ -51,8 +51,10 @@ MODEL_PATH=D:\HCL\models\Qwen3.5-0.8B
 LLM_PROVIDER=transformers
 DB_PATH=data/copilot.db
 MAX_NEW_TOKENS=400
-GENERATION_TIMEOUT=90
+GENERATION_TIMEOUT=300
 TORCH_THREADS=4
+MODEL_DISABLE_MMAP=1
+MODEL_CPU_INT8=0
 HF_HUB_OFFLINE=1
 HF_HUB_DISABLE_TELEMETRY=1
 DO_NOT_TRACK=1
@@ -78,7 +80,7 @@ For a model-free demo set `LLM_PROVIDER=mock` in `.env` and restart the backend.
 
 The target is **Qwen3.5-0.8B**, replacing the original brief's 2B target at the user's request. The downloaded revision was `2fc06364715b967f1860aea9cf38778875588b17`; its weights are approximately 1.75 GB. Other compatible local paths can be supplied, but 2B requires more memory.
 
-The [official model card](https://huggingface.co/Qwen/Qwen3.5-0.8B) originally requests current Transformers. This implementation pins `transformers==5.13.1` and `torch==2.13.0`, rather than a moving Git main branch. The [official Transformers documentation](https://huggingface.co/docs/transformers/model_doc/qwen3_5) distinguishes the text-only class from `Qwen3_5ForConditionalGeneration`, which matches this checkpoint's downloaded configuration. We load that class and `AutoTokenizer`, use CPU bfloat16, and explicitly set `enable_thinking=False` in the checkpoint's chat template. No images/video are accepted by the app; no vision preprocessing dependencies are added.
+The [official model card](https://huggingface.co/Qwen/Qwen3.5-0.8B) originally requests current Transformers. This implementation pins `transformers==5.13.1` and `torch==2.13.0`, rather than a moving Git main branch. Following the [official Transformers text-only guidance](https://huggingface.co/docs/transformers/model_doc/qwen3_5), it loads `Qwen3_5ForCausalLM` with `Qwen3_5TextConfig` and `AutoTokenizer`, using CPU bfloat16 before optional int8 conversion. Transformers' built-in checkpoint conversion selects the text weights from the downloaded multimodal checkpoint. Missing or mismatched text weights cause a loading failure instead of accepting uninitialized parameters. Vision modules are not instantiated. The chat template explicitly sets `enable_thinking=False`; no images/video or vision preprocessing dependencies are used.
 
 Loading happens once per backend process. A single-worker generation executor and lock prevent parallel inference. Greedy decoding is deterministic, equivalent to zero-temperature selection, with a maximum of 400 new tokens. Raw model context is limited to 4,000 alert characters, 20 IOCs with bounded values, bounded evidence, and up to six bounded history messages. The tokenizer rejects context above 4,096 tokens, returning rules instead of risking unbounded allocation. Shortening is reported by `context_truncated`; the complete alert is preserved in SQLite/UI/report.
 
@@ -86,7 +88,15 @@ The deadline includes model loading and retries for normal API requests. Calls w
 
 An 8 GB laptop also runs Windows, a browser, and Python. Weight size is not total working memory. Ryzen 7 5820U uses the CPU path; AMD iGPU acceleration is not configured. bfloat16 may be slow on this CPU. Optimized NVIDIA-oriented kernels are deliberately not installed. Expect 10–30+ seconds and potentially much longer; actual speed is not guaranteed.
 
-**Observed development-machine limitation:** a real offline loading attempt reached the checkpoint loader but failed with Windows error 1455, "The paging file is too small for this operation to complete." Thus real generation speed, peak loaded-model memory, and narrative quality are **not verified**. No virtual-memory settings were changed. Close memory-heavy applications and check available RAM/Windows commit capacity before rerunning; use rules-only or mock mode if the model cannot fit.
+For older AVX2 CPUs where bfloat16 is emulated slowly, `MODEL_CPU_INT8=1` enables PyTorch's existing dynamic int8 conversion for Linear layers, with float32 activations. It uses the same local checkpoint and no new dependency or download. Conversion occurs once, one Linear layer at a time to avoid expanding the whole model to float32 at once. Loading can still raise transient memory demand; validate narrative quality because quantization can change the model's output. This option relies on the pinned PyTorch version's `torch.ao.quantization` API. The CPU profile on this machine uses `MAX_NEW_TOKENS=400` and `GENERATION_TIMEOUT=300`, with concise JSON requesting three practical next steps. The health endpoint and status bar report generated token counts; loading/prefill may take time before the first token. Explanations remain recommendations, not executed actions.
+
+For this small model, the output instructions follow the delimited untrusted data, and an assistant JSON prefill starts the summary sentence. The continuation follows the [official Hugging Face chat-template prefill mechanism](https://huggingface.co/docs/transformers/main/en/chat_templating#continue_final_message), with thinking still disabled. Generation stops when a complete JSON object is available. One redundant closing brace is tolerated without changing model-written words; trailing prose, additional objects, unknown fields, and missing fields are rejected. Pydantic still validates every narrative before `engine=llm` is returned.
+
+[LM Format Enforcer](https://github.com/noamgat/lm-format-enforcer) constrains the next allowed tokens to a compact narrative JSON schema: two verification checks and three next steps, with bounded strings and required fields. Its two added pure-Python wheels total approximately 68 KB; there is no second model or network service. The adapter uses the library's public core API to support Transformers 5 and reuses tokenizer data across requests. This improves formatting; it does not establish factual correctness or guarantee completion before a deadline.
+
+**Windows loading workaround:** the default safetensors memory-mapped loader initially failed with Windows error 1455, "The paging file is too small for this operation to complete." Setting `MODEL_DISABLE_MMAP=1` uses Transformers' supported `disable_mmap=True` option instead. This successfully loaded the local 0.8B checkpoint on the development machine without manually changing Windows settings; the observed process peak working set during loading was approximately 2.63 GiB. This mode reads the checkpoint into memory and can increase transient RAM demand. Generation can still be slow under memory pressure; check actual response metadata and Task Manager instead of assuming a ready model guarantees acceptable latency.
+
+A final text-only ALR-1002 explanation was verified locally with `engine=llm`, `provider=transformers`, and no fallback, taking 206.2 seconds including cold loading and JSON-filter preparation. This machine uses `MODEL_CPU_INT8=1`, `MAX_NEW_TOKENS=400`, `GENERATION_TIMEOUT=300`, and `TORCH_THREADS=4`. The browser displays the Local AI badge, two verification checks, and three numbered steps; the "How do I resolve this alert step by step?" chip requests a scoped follow-up. The tiny model's answers can be basic or inaccurate, including misidentifying an entity or a possible cause; structured output validation does not verify its claims against the evidence.
 
 ## API and data
 
@@ -136,7 +146,7 @@ The evaluation contains 34 manually labeled regression cases, including nine ben
 Run the hardware smoke check separately (it does not read `.env`; use arguments or environment variables):
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\check_model.py --model-path D:\HCL\models\Qwen3.5-0.8B --timeout 180
+.\.venv\Scripts\python.exe scripts\check_model.py --model-path D:\HCL\models\Qwen3.5-0.8B --cpu-int8 --disable-mmap --timeout 300 --max-new-tokens 400
 ```
 
 It prints load time, explanation JSON, generation time, current/peak process RAM on Windows, and exit code 0 for real model output, 2 for rules fallback, or 1 for loading failure. Loading itself can outlast the requested generation timeout. Peak working set is process memory, not whole-system commit use; also inspect Task Manager.

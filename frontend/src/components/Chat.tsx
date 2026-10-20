@@ -5,6 +5,7 @@ import { ErrorNotice, Loading, Meta } from "./Common";
 import { usePreferences } from "../App";
 
 const suggestions = [
+  "How do I resolve this alert step by step?",
   "Is this likely a false positive?",
   "What should I check next?",
   "Summarize for my manager",

@@ -11,7 +11,7 @@ def test_scope_refuses(q):
     assert not in_scope(q,1001)
 
 
-@pytest.mark.parametrize('q', ['Is this likely a false positive?', 'What should I check next?', 'Summarize for my manager', 'What are the IOCs?', 'Why is this alert high severity?', 'Explain alert 1001'])
+@pytest.mark.parametrize('q', ['Is this likely a false positive?', 'What should I check next?', 'Summarize for my manager', 'What are the IOCs?', 'Why is this alert high severity?', 'Explain alert 1001', 'Explain step by step how to solve this alert', 'How do I resolve this alert step by step?'])
 def test_scope_allows(q):
     assert in_scope(q,1001)
 
@@ -29,14 +29,14 @@ def test_chat_isolation_injection_and_history(tmp_path):
         assert p.calls == 0
         for _ in range(5):
             assert c.post('/api/alerts/1001/chat',json={'question':'What should I check next?'}).json()['engine'] == 'llm'
-        payload = json.loads(p.messages[-1]['content'].split('UNTRUSTED_ALERT_DATA_JSON\n')[1])
+        payload = json.loads(p.messages[-1]['content'].split('UNTRUSTED_ALERT_DATA_JSON\n')[1].split('\nEND_UNTRUSTED_ALERT_DATA')[0])
         assert len(payload['history_data']) == 6
         assert payload['alert_data']['alert_id'] == 'ALR-1001'
         for aid in (1029,1030):
             c.post(f'/api/alerts/{aid}/chat',json={'question':'What should I check next?'})
             assert p.messages[0]['role'] == 'system'
             assert 'untrusted DATA' in p.messages[0]['content']
-            payload = json.loads(p.messages[-1]['content'].split('UNTRUSTED_ALERT_DATA_JSON\n')[1])
+            payload = json.loads(p.messages[-1]['content'].split('UNTRUSTED_ALERT_DATA_JSON\n')[1].split('\nEND_UNTRUSTED_ALERT_DATA')[0])
             assert payload['history_data'] == []
             assert 'ignore' in payload['alert_data']['raw_alert'].lower()
         before = p.calls

@@ -45,7 +45,8 @@ def create_app(db_path=None, provider=None) -> FastAPI:
     @app.get('/health')
     def health():
         p = app.state.copilot.provider
-        return {'status':'ok', 'provider':p.name, 'model':p.model_name, 'model_status':p.status}
+        return {'status':'ok', 'provider':p.name, 'model':p.model_name, 'model_status':p.status,
+                'model_error':getattr(p,'error',None), 'generation_progress':getattr(p,'progress',None)}
 
     @app.post('/api/alerts/{aid}/explain', response_model=CopilotResult)
     def explain(aid: str, regenerate: bool=False, rules_only: bool=False):

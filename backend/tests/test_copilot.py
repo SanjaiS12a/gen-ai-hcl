@@ -35,6 +35,18 @@ def test_invalid_json_retry_and_fallback(tmp_path):
     assert c.provider.calls == 2
 
 
+def test_placeholder_steps_are_not_accepted_as_model_advice(tmp_path):
+    class Placeholder(MockProvider):
+        def generate(self, messages, deadline):
+            self.calls += 1
+            return json.dumps({'summary':'Possible phishing.', 'why_it_matters':'Credentials could be exposed.',
+                              'verify_first':['check one','check two'],
+                              'next_steps':['step one','step two','step three']})
+    store, c = setup(tmp_path, Placeholder())
+    assert c.explain(store.get(1002)).engine == 'rules'
+    assert c.provider.calls == 2
+
+
 def test_retry_recovers(tmp_path):
     class Retry(MockProvider):
         def generate(self,messages,deadline):
@@ -73,3 +85,26 @@ def test_model_unavailable_falls_back(tmp_path):
             raise FileNotFoundError('model absent')
     store,c = setup(tmp_path,Missing())
     assert c.explain(store.get(1001)).engine == 'rules'
+
+
+def test_provider_value_error_with_debug_logging_falls_back(tmp_path, monkeypatch):
+    class Malformed(MockProvider):
+        def generate(self, messages, deadline):
+            self.calls += 1
+            raise ValueError('Incomplete JSON object')
+    monkeypatch.setenv('LLM_DEBUG_OUTPUT', '1')
+    store, c = setup(tmp_path, Malformed())
+    result = c.explain(store.get(1001))
+    assert result.engine == 'rules'
+    assert c.provider.calls == 2
+    assert 'invalid JSON' in result.fallback_reason
+
+
+def test_prompt_requests_practical_step_by_step_actions(tmp_path):
+    store,c = setup(tmp_path)
+    messages = c.messages(store.get(1001))
+    assert 'step-by-step' in messages[-1]['content']
+    assert 'expected result' in messages[-1]['content']
+    assert 'High severity does not prove compromise' in messages[0]['content']
+    assert messages[-1]['content'].index('END_UNTRUSTED_ALERT_DATA') < messages[-1]['content'].index('Return ONLY a JSON object')
+    assert 'check one' not in messages[-1]['content']

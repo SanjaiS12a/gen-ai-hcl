@@ -1,0 +1,21 @@
+{
+  "summary": "The alert reports a high-severity phishing threat requiring immediate attention from the analyst.",
+  "why_it_matters": "This alert indicates a potential compromise of the email gateway, which could lead to unauthorized access to sensitive data or account takeover.",
+  "verify_first": [
+    "Check if the email address 'analyst' was sent from the gateway",
+    "Verify if the URL 'https://invoice.example/verify' was accessed from the gateway"
+  ],
+  "next_steps": [
+    "Quarantine the email and remove matching messages from other inboxes",
+    "Block the sender, malicious URL, and related domains at email and web gateways",
+    "Check whether recipients clicked the link or opened attachments"
+  ],
+  "false_positive_likelihood": null,
+  "engine": "llm",
+  "provider": "transformers",
+  "model": "D:\\HCL\\models\\Qwen3.5-0.8B",
+  "generation_ms": 206230,
+  "fallback_reason": null,
+  "context_truncated": false,
+  "cached": false
+}

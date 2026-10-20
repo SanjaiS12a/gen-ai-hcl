@@ -60,6 +60,7 @@ export default function SettingsPage() {
           severity, and MITRE mappings always come from code.
         </p>
         <h3>Runtime</h3>
+        {health?.model_error && <ErrorNotice error={health.model_error}/>}
         {health ? (
           <dl>
             <div>

@@ -57,6 +57,8 @@ export type Health = {
   provider: string;
   model: string;
   model_status: "not_loaded" | "loading" | "ready" | "error";
+  model_error?: string | null;
+  generation_progress?: {phase:string;input_tokens:number;generated_tokens:number} | null;
 };
 export type Provenance = {
   engine: "llm" | "rules";

@@ -12,6 +12,8 @@ def in_scope(question: str, alert_id: int) -> bool:
     text = re.sub(r'\b(?:alr-)?'+str(alert_id)+r'\b','this',text)
     text = re.sub(r'^please\s+','',text)
     patterns = [
+        r'explain step by step how to (?:solve|resolve|investigate|handle) (?:this alert|it)',
+        r'(?:how (?:do|should|can) i|how to) (?:solve|resolve|investigate|handle|fix) (?:this alert|it)(?: step by step)?',
         r'(?:explain|summarize|analyse|analyze|triage) (?:this|the)(?: alert| incident)?',
         r'explain alert this',
         r'summarize (?:this alert )?for my manager',

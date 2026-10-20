@@ -35,8 +35,12 @@ def main():
     parser.add_argument('--model-path',default=os.getenv('MODEL_PATH','Qwen/Qwen3.5-0.8B'))
     parser.add_argument('--timeout',type=float,default=180)
     parser.add_argument('--max-new-tokens',type=int,default=400)
+    parser.add_argument('--cpu-int8',action='store_true',default=os.getenv('MODEL_CPU_INT8')=='1')
+    parser.add_argument('--disable-mmap',action='store_true',default=os.name=='nt')
     args = parser.parse_args()
     os.environ.update(MODEL_PATH=args.model_path,HF_HUB_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',DO_NOT_TRACK='1',MAX_NEW_TOKENS=str(args.max_new_tokens))
+    os.environ['MODEL_CPU_INT8']='1' if args.cpu_int8 else '0'
+    os.environ['MODEL_DISABLE_MMAP']='1' if args.disable_mmap else '0'
     from app.db import Store
     from app.llm.providers import TransformersProvider
     from app.llm.copilot import Copilot
